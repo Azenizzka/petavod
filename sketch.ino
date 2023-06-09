@@ -1,27 +1,32 @@
+
 #include <LiquidCrystal_I2C.h>
-#include <Wire.h>
-#include <Stepper.h>
 
 #define DELTA -6
 
-#define BUTTON_UP_PIN 4 // КНОПКА ДЛЯ ПОВЫШЕНИЯ ТЕМПЕРАТУРЫ
-#define BUTTON_DOWN_PIN 5 // КНОПКА ДЛЯ ПОНИЖЕНИЯ ТЕМПЕРАТУРЫ
-#define TEMP_STEP 10 // ШАГ ИЗМЕНЕНИЯ ТЕМПЕРАТУРЫ (+X / -X)
+#define BUTTON_UP_PIN 7 // КНОПКА ДЛЯ ПОВЫШЕНИЯ ТЕМПЕРАТУРЫ
+#define BUTTON_DOWN_PIN 6 // КНОПКА ДЛЯ ПОНИЖЕНИЯ ТЕМПЕРАТУРЫ
+#define BUTTON_TOGGLE_STEPPER 12
+#define TEMP_STEP 5 // ШАГ ИЗМЕНЕНИЯ ТЕМПЕРАТУРЫ (+X / -X)
 
 #define TEMP_PIN A0 // ТЕРМОРЕЗИСТОР
-#define RELAY_PIN 3 // РЕЛЕ, УПРАВЛЯЮЩЕЕ НАГРЕВОМ
-#define SPEAKER_PIN 7
+#define RELAY_PIN 2 // РЕЛЕ, УПРАВЛЯЮЩЕЕ НАГРЕВОМ
+#define SPEAKER_PIN 5
 
-//#define STEPPER_SPEED 3 // СКОРОСТЬ ШАГА
-//#define STEPS 90 // КОЛИЧЕСТВО ШАГОВ
+#define ENA 8
+#define DIR 9
+#define PUL 10
 
-LiquidCrystal_I2C LCD(0x27, 16, 2);
-//Stepper myStepper(STEPS, 8, 9, 10, 11);
+
+
+LiquidCrystal_I2C LCD(0x27, A5, A4);
 
 int res = 25;
 bool isHeatToggle = false; 
 bool isPressedUp = false;
 bool isPressedDown = false;
+bool isPressedToggleStepper = false;
+bool isToggleStepper = false;
+bool stepperBool = false;
 
 int temp = 350;
 
@@ -39,16 +44,17 @@ void setup() {
 
   LCD.init();
   LCD.backlight();
-
-  //myStepper.setSpeed(STEPPER_SPEED);
   
   pinMode(TEMP_PIN, INPUT);
-  pinMode(BUTTON_UP_PIN, INPUT); 
-  pinMode(BUTTON_DOWN_PIN, INPUT); 
+  pinMode(BUTTON_UP_PIN, INPUT_PULLUP); 
+  pinMode(BUTTON_DOWN_PIN, INPUT_PULLUP); 
+  pinMode(BUTTON_TOGGLE_STEPPER, INPUT_PULLUP);
 
   pinMode(SPEAKER_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
-
+  pinMode(ENA, OUTPUT);
+  pinMode(DIR, OUTPUT);
+  pinMode(PUL, OUTPUT);
 }
 
 unsigned long lcdTimer;
@@ -62,9 +68,42 @@ void loop() {
   }
   checkButtonUp();
   checkButtonDown();
+  checkButtonToggleStepper();
   if(millis() - speakerTimer > 750) {
-     speakerTimer = millis();
-     digitalWrite(SPEAKER_PIN, LOW);
+    speakerTimer = millis();
+    digitalWrite(SPEAKER_PIN, LOW);
+  }
+
+  if(isToggleStepper) {
+    digitalWrite(ENA, 0);
+    doStepper();
+  } else {
+    digitalWrite(ENA, 1);
+  }
+}
+
+unsigned long stepperTimer;
+int timeImpulse = 80;
+
+void doStepper() {
+  for(int i = 0; i <= 200; i++) {
+    if(millis() - stepperTimer > timeImpulse) {
+      stepperTimer = millis();
+      stepperBool = !stepperBool;
+      digitalWrite(PUL, stepperBool);
+    }
+  }
+}
+
+void checkButtonToggleStepper() {
+  if(!digitalRead(BUTTON_TOGGLE_STEPPER) && !isPressedToggleStepper) {
+    isPressedToggleStepper = true;
+    isToggleStepper = !isToggleStepper;
+    
+  }
+
+  if(digitalRead(BUTTON_TOGGLE_STEPPER)) {
+    isPressedToggleStepper = false;
   }
 }
 
@@ -113,10 +152,6 @@ void tempDown() {
   } else {
     doSpeaker();
   }
-}
-
-void doStepper() {
-  //myStepper.step(STEPS);
 }
 
 void doRelay() {
